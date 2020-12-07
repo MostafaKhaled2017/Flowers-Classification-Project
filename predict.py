@@ -33,12 +33,17 @@ else:
 
 def load_checkpoint(filepath):
     checkpoint = torch.load(filepath)
-    model = checkpoint['model']
+    
+    
+    if(checkpoint['arch'] == 'densenet'):
+        model = models.densenet121(pretrained=True)
+    else:
+        model = models.vgg19(pretrained=True)
+    
     model.classifier = checkpoint['classifier']
     model.optimizer = checkpoint['optimizer']
     model.class_to_idx = checkpoint['class_to_idx']
     model.arch = checkpoint['arch']
-
     model.load_state_dict(checkpoint['state_dict'])
     model.optimizer.load_state_dict(checkpoint['optimizer_dict'])
 
@@ -69,39 +74,53 @@ np_image = process_image('flowers/test/1/image_06743.jpg')
 def predict(image_path, model, topk=5):
     ''' Predict the class (or classes) of an image using a trained deep learning model.
     '''
+    
+    if (args.gpu) and torch.cuda.is_available():
+        device = 'cuda'
+    else:
+        device = 'cpu'
     image = process_image(image_path)
-    image_tensor = torch.from_numpy(image).type(torch.cuda.FloatTensor)
+    
+    if device == 'cuda':
+        image_tensor = torch.from_numpy(image).type(torch.cuda.FloatTensor)
+    else:
+        image_tensor = torch.from_numpy(image).type(torch.FloatTensor)
+    
     image_tensor.unsqueeze_(0)
-    image_tensor.to('cuda')
+    image_tensor.to(device)
     
     for param in model.parameters():
         param.requires_grad_(False)
 
     model.eval()
-    model.to('cuda')
+    model.to(device)
     output = model(image_tensor)
     ps = torch.exp(output)
 
-    probs, classes = ps.topk(topk, dim=1)
+    probs, indices = ps.topk(topk, dim=1)
     
-    probs, classes = probs[0].tolist(), classes[0].add(1).tolist()
-    results = zip(probs,classes)
-    return results, image   
+    idx_to_class = {value: key for key,value in model.class_to_idx.items()}
+
+    prob = [p.item() for p in probs[0].data]
+
+    classes = [idx_to_class[i.item()] for i in indices[0].data]
+    return prob, classes, image  
     
     
     # TODO: Implement the code to predict the class from an image file
-results, image = predict(image_path , loaded_model, top_k)
+probs, classes, image = predict(image_path , loaded_model, top_k)
 
 cat_file = jfile
 
-i = 0
-for prob, classes in results:
-    i = i + 1
-    prob = str(round(prob,4) * 100.) + '%'
-    
-    if (cat_file):
-        classes = cat_file.get(str(classes),'None')
-    else:
-        classes = ' class {}'.format(str(classes))
-    print("{}.{} ({})".format(i, classes,prob))
 
+
+if cat_file is None:
+    labels = classes
+else:
+    labels = [cat_file[str(index)] for index in classes]
+probability = probs
+    
+i=0 
+while i < len(labels):
+    print("{} with a probability of {}".format(labels[i], probability[i]*100))
+    i += 1

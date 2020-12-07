@@ -37,10 +37,10 @@ if(not os.path.isdir(args.data_directory)):
     data_dir = os.listdir(args.data_directory)
 
 
-data_dir = 'flowers'
-train_dir = args.data_directory + '/train'
-valid_dir = args.data_directory + '/valid'
-test_dir = args.data_directory + '/test'
+data_dir = args.data_directory
+train_dir = data_dir + '/train'
+valid_dir = data_dir + '/valid'
+test_dir = data_dir + '/test'
 
 # TODO: Define your transforms for the training, validation, and testing sets
 data_transforms = transforms.Compose([transforms.RandomRotation(30),
@@ -49,13 +49,19 @@ data_transforms = transforms.Compose([transforms.RandomRotation(30),
                                        transforms.ToTensor(),
                                        transforms.Normalize([0.485, 0.456, 0.406], 
                                                              [0.229, 0.224, 0.225])])
+test_transforms = transforms.Compose([transforms.Resize(256),
+                                      transforms.CenterCrop(224),
+                                      transforms.ToTensor(),
+                                      transforms.Normalize([0.485, 0.456, 0.406], 
+                                                             [0.229, 0.224, 0.225])])
+
 
 
 
 # TODO: Load the datasets with ImageFolder
 train_data = datasets.ImageFolder(train_dir, transform=data_transforms)
-validation_data = datasets.ImageFolder(valid_dir, transform=data_transforms)
-test_data = datasets.ImageFolder(test_dir, transform=data_transforms)
+validation_data = datasets.ImageFolder(valid_dir, transform=test_transforms)
+test_data = datasets.ImageFolder(test_dir, transform=test_transforms)
 
 # TODO: Using the image datasets and the trainforms, define the dataloaders
 train_loader = torch.utils.data.DataLoader(train_data, batch_size=32, shuffle=True)
@@ -69,7 +75,7 @@ if (args.arch is None):
     arch_type = 'vgg'
 else:
     arch_type = args.arch
-if(args.arch is 'densenet'):
+if(args.arch == 'densenet'):
     model = models.densenet121(pretrained=True)
     input_node=1024
 else:
@@ -80,18 +86,18 @@ else:
 for param in model.parameters():
     param.requires_grad = False
     
-    if (args.learning_rate is None):
-        lr = 0.001
-    else:
-        lr = float(args.learning_rate)
-    if (args.epochs is None):
-        epochs = 10
-    else:
-        epochs = int(args.epochs)
-    if (args.gpu):
-        device = 'cuda'
-    else:
-        device = 'cpu'
+if (args.learning_rate is None):
+    lr = 0.001
+else:
+    lr = float(args.learning_rate)
+if (args.epochs is None):
+    epochs = 10
+else:
+    epochs = int(args.epochs)
+if (args.gpu) and torch.cuda.is_available():
+    device = 'cuda'
+else:
+    device = 'cpu'
    
 if (args.hidden_units is None):
     hidden_units = 4096
@@ -178,11 +184,11 @@ else:
  
 checkpoint = {'optimizer' : optimizer,
               'classifier' : model.classifier,
-              'model' : model,
               'class_to_idx' : train_data.class_to_idx,
               'optimizer_dict': optimizer.state_dict(),
               'state_dict': model.state_dict(),
-              'arch': 'densenet121'}
+              'arch': arch_type}
+
 
 torch.save(checkpoint, save_dir)
    
